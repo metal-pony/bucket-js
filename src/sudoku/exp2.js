@@ -1,6 +1,6 @@
 import { range, shuffle } from '../util/arrays.js';
 import Debugger from '../util/debug.js';
-import { createSieve2 } from './siever.js';
+import { searchForSieve2 } from './siever.js';
 import Sudoku from './Sudoku.js';
 import SudokuSieve from './SudokuSieve.js';
 
@@ -210,7 +210,8 @@ function _sieveChoice(sieve) {
 function _sieveChoice2(sieve) {
   // let { matrix, maximum, maximumCells } = sieve.reductionMatrix();
   const item = sieve.first;
-  const alts = shuffle(cellsFromMask(item));
+  const alts = cellsFromMask(item);
+  shuffle(alts);
   const cell = alts.shift();
   return {
     cell,
@@ -226,33 +227,53 @@ function _sieveChoice2(sieve) {
 // Mutation = flip some bits at random, maybe at the rate of a function of fitness
 // Selection =
 
-function SuperSet() {
+export function SuperSet() {
   /** @type {Set<bigint>[]} */
   const _itemSets = Array(81).fill(0).map(_=>new Set());
+  const _bigintHash = (bb) => Number(bb % 81n);
   let _size = 0n;
-  const _bigintHash = (bb) => (bb % 81n);
+  let _hits = 0;
+  let _total = 0;
   return {
+    get size() {
+      return _size;
+    },
     /**
      * @param {bigint} item
      * @returns {boolean} True if the item was successfully added; otherwise false.
      */
     add(item) {
-      if (_itemSets[_bigintHash(item)].has(item)) {
-        return false;
+      const subset = _itemSets[_bigintHash(item)];
+      const sizeBefore = subset.size;
+      subset.add(item);
+      if (subset.size > sizeBefore) {
+        _size++;
+        return true;
       }
-      _itemSets[_bigintHash(item)].add(item);
-      _size++;
-      return true;
+      return false;
     },
     /**
      * @param {bigint} item
      * @returns {boolean}
      */
     has(item) {
-      return _itemSets[_bigintHash(item)].has(item);
+      _total++;
+      if (_itemSets[_bigintHash(item)].has(item)) {
+        _hits++;
+        return true;
+      }
+      return false;
     },
-    get size() {
-      return _size;
+    clear() {
+      _itemSets.forEach(set => set.clear());
+      _size = 0n;
+      _hits = 0;
+      _total = 0;
+    },
+    toString() {
+      const hitPercent = ((_hits / (_total || 1)) * 100).toFixed(2);
+      const dist = _size > 81**2 ? _itemSets.map(set => set.size).join(',') : 'n/a';
+      return `SuperSet{size: ${_size}, hits: ${_hits}/${_total} (${hitPercent}%), subsetDist: [${dist}]}`;
     }
   };
 }
@@ -267,6 +288,7 @@ function SuperSet() {
  * @param {SudokuSieve} sieve
  * @param {number=27} maxLen
  * @param {number=2500} maxSize
+ * @param {(mask: bigint, numCells: number) => void} callback
  * @returns {Set<bigint>[]}
  */
 // TODO Rewrite this from scratch. DFS over all sieve items.
@@ -276,7 +298,7 @@ function SuperSet() {
 // TODO     Respect the max result length by backtracking if the stack grows larger than maxLen.
 // TODO     Respect the max results size by stopping the search once there are maxSize results.
 // TODO     Don't forget to add all the sieve items back before exiting. The sieve items must remain intact.
-export function sieveCombos4(sieve, maxLen = 21, maxSize = 2500) {
+export function sieveCombos4(sieve, maxLen = 21, maxSize = 2500, callback = null) {
   // !Side: Modifies sieve by removing overlapping items
   const root = _sieveChoice2(sieve);
 
@@ -321,15 +343,37 @@ export function sieveCombos4(sieve, maxLen = 21, maxSize = 2500) {
     return false;
   };
 
+  const startTime = Date.now();
+  const MS_TO_UPDATE = 15000;
+  let lastUpdate = startTime - MS_TO_UPDATE;
+  let iterations = 0;
+
   while (stack.length > 0 && total < maxSize) {
+    iterations++;
+    const now = Date.now();
+    if ((now - lastUpdate) > MS_TO_UPDATE) {
+      lastUpdate = now;
+      // Print a snapshot the stack contents and the seen cache
+      // console.log(JSON.stringify(stack, (_,v)=>(typeof v === 'bigint') ? v.toString() : v));
+      console.log(
+        `Stack{ iterations: ${iterations}, [${stack.map(({cell, alts, items}) => `${cell}(${alts.length})`).join(',')}] }`
+      );
+      // console.log(seen.toString());
+    }
+
   // while (stack.length > 0) {
     // const top = stack[stack.length - 1];
     // let topAltsStr = `{${top.alts.join(',')}}`.padEnd(30, ' ');
+
+    // console.log(`[${stack.map(({cell, alts, items}) => `${cell}(${alts.length})`).join(',')}] }`);
 
     if (sieve.length === 0) {
       if(!results[stack.length].has(m)) {
         results[stack.length].add(m);
         total++;
+        if (callback) {
+          callback(m, stack.length);
+        }
         // let mStr = m.toString(2).padStart(81, '0').replace(/0/g, '.').replace(/1/g, '#');
         // whenDebugging.log(`[${stack.length}] ${mStr}`);
       }
@@ -848,7 +892,7 @@ export function f(config, existingSieve = [], maxSieveSize = 100) {
       }
     });
   } else {
-    createSieve2(config, { maxDigits: 2, maxLength: 18 }).forEach((sieveItem) => {
+    searchForSieve2(config, { maxDigits: 2, maxLength: 18 }).forEach((sieveItem) => {
       if (ss.add(sieveItem)) {
         console.log(`[${ss.length.toString().padStart(padding, ' ')}]  ${sieveItem}n,`);
         sieve.push(sieveItem);
@@ -857,14 +901,14 @@ export function f(config, existingSieve = [], maxSieveSize = 100) {
         console.log(`❌  sieve item was not added [${sieveItem}]`);
       }
     });
-    createSieve2(config, { maxDigits: 3, maxLength: 9 }).forEach((sieveItem) => {
+    searchForSieve2(config, { maxDigits: 3, maxLength: 9 }).forEach((sieveItem) => {
       // if (!sieve.includes(sieveItem)) {
         if (ss.add(sieveItem)) {
           console.log(`[${ss.length.toString().padStart(padding, ' ')}]  ${sieveItem}n,`);
           sieve.push(sieveItem);
           // i++;
         } else {
-          if (!ss._isDerivative(sieveItem)) {
+          if (!ss.isDerivative(sieveItem)) {
             console.log(`❌  sieve item was not added [${sieveItem}]`);
           }
         }
@@ -1008,7 +1052,7 @@ export function f2(config, existingSieve = [], maxSieveSize = 1000) {
       }
     });
   } else {
-    createSieve2(config, { maxDigits: 2, maxLength: 18 }).forEach((sieveItem) => {
+    searchForSieve2(config, { maxDigits: 2, maxLength: 18 }).forEach((sieveItem) => {
       if (ss.add(sieveItem)) {
         console.log(`[${ss.length.toString().padStart(padding, ' ')}]  ${sieveItem}n,`);
         sieve.push(sieveItem);
@@ -1017,14 +1061,14 @@ export function f2(config, existingSieve = [], maxSieveSize = 1000) {
         console.log(`❌  sieve item was not added [${sieveItem}]`);
       }
     });
-    createSieve2(config, { maxDigits: 3, maxLength: 9 }).forEach((sieveItem) => {
+    searchForSieve2(config, { maxDigits: 3, maxLength: 9 }).forEach((sieveItem) => {
       // if (!sieve.includes(sieveItem)) {
         if (ss.add(sieveItem)) {
           console.log(`[${ss.length.toString().padStart(padding, ' ')}]  ${sieveItem}n,`);
           sieve.push(sieveItem);
           // i++;
         } else {
-          if (!ss._isDerivative(sieveItem)) {
+          if (!ss.isDerivative(sieveItem)) {
             console.log(`❌  sieve item was not added [${sieveItem}]`);
           }
         }
@@ -1193,14 +1237,14 @@ export function searchForPrimeInvalidFromMask(ss, mask, cache) {
 /**
  *
  * @param {Sudoku} config
- * @param {bigint[]} sieve
+ * @param {bigint[]} sieveItems
  * @param {(failReason: string) => void} failCallback
  * @returns {boolean}
  */
-export function verifySieveItems(config, sieve, failCallback = null) {
-  const _sieveSet = new Set(sieve);
+export function verifySieveItems(config, sieveItems, failCallback = null) {
+  const _sieveSet = new Set(sieveItems);
 
-  if (_sieveSet.size !== sieve.length) {
+  if (_sieveSet.size !== sieveItems.length) {
     if (failCallback) {
       failCallback('contains duplicates');
     }
@@ -1209,8 +1253,8 @@ export function verifySieveItems(config, sieve, failCallback = null) {
 
   // const configBoard = config.board;
 
-  for (let i = 0; i < sieve.length; i++) {
-    const item = sieve[i];
+  for (let i = 0; i < sieveItems.length; i++) {
+    const item = sieveItems[i];
 
     // Check for derivatives
     // for (let j = 0; j < sieve.length; j++) {
@@ -1230,31 +1274,38 @@ export function verifySieveItems(config, sieve, failCallback = null) {
     const p = config.filter(~item);
     const b = p.board;
 
-    // Check that there are multiple solutions
-    if (p.solutionsFlag() !== 2) {
+    if (p._reduce()) {
       if (failCallback) {
-        failCallback(`item [${item}] does not have single solution`);
+        failCallback(
+          `sieve item[${i}]: ${item}n; is reducable\n` +
+          `            ${b.join('')}\n` +
+          `  reduced > ${p.toString()}`
+        );
       }
       return false;
     }
 
-    // For every antiderivative, check that it has a single solution
-    for (let ci = 0; ci < 81; ci++) {
-      const digit = b[ci];
-      if (digit === 0) {
-        const nextPuzzle = new Sudoku(p);
+    // Check that there are multiple solutions
+    const pFlag = p.solutionsFlag();
+    if (pFlag !== 2) {
+      if (failCallback) {
+        failCallback(`sieve item[${i}]: ${item}n; has pFlag = ${pFlag} (expected: 2)`);
+      }
+      return false;
+    }
 
-        const candidates = nextPuzzle.getCandidates(ci);
-        for (const candidateDigit of candidates) {
-          nextPuzzle.setDigit(candidateDigit, ci);
-          const nextFlag = nextPuzzle.solutionsFlag();
-          if (nextFlag > 1) {
-            if (failCallback) {
-              failCallback(`item [${item}] has multiple solutions`);
-            }
-            return false;
-          }
+    // For every antiderivative, check that it has a single or no solution
+    for (const a of p.getAntiderivatives()) {
+      const aFlag = a.solutionsFlag();
+      if (aFlag === 0) {
+        console.log(`sieve item[${i}]: ${item}n; has no solution (expected: 1)`);
+        return false;
+      }
+      if (aFlag > 1) {
+        if (failCallback) {
+          failCallback(`sieve item[${i}]: ${item}n; has multiple solutions (expected: 1)`);
         }
+        return false;
       }
     }
   }
@@ -2532,7 +2583,7 @@ export const sieve = [
 // Create and output initial sieve.
 // whenDebugging.log('Creating initial sieve ...');
 // const startTime = Date.now();
-// const sieve = new Set(createSieve2(config, { maxDigits: 2, maxLength: 18 }));
+// const sieve = new Set(searchForSieve2(config, { maxDigits: 2, maxLength: 18 }));
 // whenDebugging.log(`Sieve created in ${Date.now() - startTime}ms.`);
 // whenDebugging.log(`Sieve size: ${sieve.length}`);
 // sieve.forEach((sieveItem) => { console.log(config.filter(~sieveItem).toString()) });

@@ -31,25 +31,25 @@ describe('Sudoku', () => {
       const board = new Sudoku(config).board;
 
       // 1s in the mask indicate cells that are kept
-      expect(Sudoku.mask(config, masksFor.none).board).toEqual(new Array(81).fill(0));
-      expect(Sudoku.mask(config, masksFor.all).board).toEqual(board);
+      expect(config.filter(masksFor.none).board).toEqual(new Array(81).fill(0));
+      expect(config.filter(masksFor.all).board).toEqual(board);
 
       masksFor.row.forEach((mask, rowIndex) => {
-        const maskedBoard = Sudoku.mask(config, mask).board;
+        const maskedBoard = config.filter(mask).board;
         for (let ci = 0; ci < 81; ci++) {
           expect(maskedBoard[ci]).toBe((cellRow(ci) === rowIndex) ? board[ci] : 0);
         }
       });
 
       masksFor.col.forEach((mask, colIndex) => {
-        const maskedBoard = Sudoku.mask(config, mask).board;
+        const maskedBoard = config.filter(mask).board;
         for (let ci = 0; ci < 81; ci++) {
           expect(maskedBoard[ci]).toBe((cellCol(ci) === colIndex) ? board[ci] : 0);
         }
       });
 
       masksFor.region.forEach((mask, regionIndex) => {
-        const maskedBoard = Sudoku.mask(config, mask).board;
+        const maskedBoard = config.filter(mask).board;
         for (let ci = 0; ci < 81; ci++) {
           expect(maskedBoard[ci]).toBe((cellRegion(ci) === regionIndex) ? board[ci] : 0);
         }
@@ -145,7 +145,7 @@ function expectPuzzleToBeValid(puzzle) {
       `Expected region ${i} to be valid:\n${puzzle.regionVals(i).join('')}`
     ).toBe(true);
   }
-  expect(puzzle.isValid()).toBe(true);
+  expect(puzzle.isValid).toBe(true);
 }
 
 /**
@@ -167,7 +167,7 @@ function expectPuzzleToBeFull(puzzle) {
       `Expected region ${i} to be full:\n${puzzle.regionVals(i).join('')}`
     ).toBe(true);
   }
-  expect(puzzle.isFull()).toBe(true);
+  expect(puzzle.isFull).toBe(true);
   expect(puzzle.numEmptyCells).toBe(0);
 }
 
@@ -208,7 +208,7 @@ function expectPuzzleToBeValidAndSolvable({
   expectPuzzleToBeValid(puzzle);
   expectPuzzleToBeFull(puzzle);
 
-  expect(puzzle.isSolved()).toBe(true);
+  expect(puzzle.isSolved).toBe(true);
   // Expect a puzzle's clues to be retained after solving.
   expect(puzzle.numClues).toBe(expectedNumClues);
   expect(puzzle.clues).toEqual(expect.arrayContaining(expectedClues));

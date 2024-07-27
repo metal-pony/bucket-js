@@ -1,10 +1,11 @@
 import {
   bitComboToR,
   Sudoku,
-  createSieve2,
+  searchForSieve2,
   analyzeEmptyCellChain,
   findUnsolvablePairs,
-  isUnsolvablePair
+  isUnsolvablePair,
+  SudokuSieve
 } from '../../index.js';
 
 const configStr = '218574639573896124469123578721459386354681792986237415147962853695318247832745961';
@@ -42,22 +43,35 @@ const expectedSieveItemsByChainLength = [
     '218..4639573896124469123578721..9386354681792986237415147962853695318247832..5961',
     '218...639573896124469123578721459386354681792986237415147962853695318247832...961',
     '2.8.74.395738961244.9.23.78721459386354681792986237415147962853695318247832745961',
-    '2.8.74.3957389612446912357872.4593.63546817929.62374.5147962853695318247832745961',
+    '2..57463957389612446912357872.4593.63546817929.62374.5147962853695318247832745961',
   ].map(s => BigInt(`0b${s.replace(/[^.]/g, '0').replace(/\./g, '1')}`)),
 ];
 
-describe('createSieve2', () => {
+describe('searchForSieve2', () => {
+  test('finds all 2-digit chains length 4', () => {
+    const expectedItems = expectedSieveItemsByChainLength[4];
+    const sieve = new SudokuSieve({ config });
+    searchForSieve2(sieve);
+    const items = sieve.items;
+    expect(items.length).toBe(expectedItems.length);
+    expect(items).toEqual(expect.arrayContaining(expectedItems));
+  });
+
   test('finds expected pairs', () => {
     // const prevSieve = [];
-    // TODO createSieve2(config, maxLength = 6+) is not finding all expected chains
+    // TODO searchForSieve2(config, maxLength = 6+) is not finding all expected chains
     // TODO But the function isn't being used in the more recent generation approaches, so
-    // TODO fixing it isn't a priority.
-    for (let maxLength = 0; maxLength < expectedSieveItemsByChainLength.length - 1; maxLength++) {
-      const sieve = createSieve2(config, maxLength, []);
+    // TODO fixing it isn't a priority. For now, just test the first 5 chain lengths.
+    const sieve = new SudokuSieve({ config });
+    for (let maxLength = 0; maxLength < expectedSieveItemsByChainLength.length; maxLength++) {
+      searchForSieve2(sieve, { maxLength, maxDigits: (((maxLength + 1) / 2) | 0)  });
+
+      const items = sieve.items;
       const expectedItems = expectedSieveItemsByChainLength.slice(0, Math.max(5, maxLength + 1)).flat();
+
       // const expectedItems = expectedSieveItemsByChainLength[maxLength];
-      expect(sieve.length).toBe(expectedItems.length);
-      expect(sieve).toEqual(expect.arrayContaining(expectedItems));
+      expect(items.length).toBe(expectedItems.length);
+      expect(items).toEqual(expect.arrayContaining(expectedItems));
 
       // prevSieve.push(...sieve);
     }

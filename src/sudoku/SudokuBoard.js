@@ -183,7 +183,7 @@ export default class SudokuBoard {
 
   _bindToGame() {
     this.selected = -1;
-    const isSolved = this.game.isSolved();
+    const isSolved = this.game.isSolved;
     this._removeValidityCss();
     this.game.board.forEach((digit, cellIndex) => {
       this.updateCellToDigit(cellIndex, digit);
@@ -212,7 +212,7 @@ export default class SudokuBoard {
       cell.onclick = null;
     } else {
       cell.onclick = (() => {
-        if (this.loading || this.game.isSolved()) {
+        if (this.loading || this.game.isSolved) {
           return;
         }
 
@@ -220,7 +220,7 @@ export default class SudokuBoard {
         cell.focus();
         this.updateCellToDigit(cellIndex, (cell.value*1 + 1) % 10);
         this._removeValidityCss();
-        if (this.game.isSolved()) {
+        if (this.game.isSolved) {
           this._applyValidityCss();
         }
       });
@@ -236,17 +236,18 @@ export default class SudokuBoard {
         const key = event.key;
 
         if (Object.keys(numberKeyMap).includes(key)) {
-          if (this.loading || this.game.isSolved()) {
+          if (this.loading || this.game.isSolved) {
             return;
           }
 
           this.updateCellToDigit(cellIndex, numberKeyMap[key]);
           this._removeValidityCss();
-          if (this.game.isSolved()) {
+          if (this.game.isSolved) {
             this._applyValidityCss();
           }
         } else if (Object.keys(arrowKeyMap).includes(key)) {
-          let nextCellIndex = this.game._findFirstEmptyCell();
+
+          let nextCellIndex = this.game.board.findIndex((val) => !isDigit(val));
           if (this.selected >= 0) {
             nextCellIndex = arrowKeyMap[key](this.game, this.selected);
           }
@@ -286,7 +287,7 @@ export default class SudokuBoard {
     const rowValidity = digits.map(row => this.game.isRowValid(row));
     const colValidity = digits.map(col => this.game.isColValid(col));
     const regionValidity = digits.map(region => this.game.isRegionValid(region));
-    const solved = this.game.isSolved();
+    const solved = this.game.isSolved;
 
     this._removeValidityCss();
 
@@ -341,7 +342,7 @@ export default class SudokuBoard {
     solveBtn.appendChild(icon);
     solveBtn.appendChild(document.createTextNode(' Solve'));
     solveBtn.onclick = (() => {
-      if (this.loading || this.game.isSolved()) return;
+      if (this.loading || this.game.isSolved) return;
       this.game.solve()
       this._bindToGame(this.game);
       this._applyValidityCss();
@@ -373,7 +374,7 @@ export default class SudokuBoard {
     btn.appendChild(icon);
     btn.appendChild(document.createTextNode(' Check!'));
     btn.onclick = (() => {
-      if (this.loading || this.game.isSolved()) return;
+      if (this.loading || this.game.isSolved) return;
 
       this._removeValidityCss();
 

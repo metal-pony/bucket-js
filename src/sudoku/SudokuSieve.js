@@ -9,6 +9,10 @@ function cellMask(cellIndex) {
   return 1n << (80n - BigInt(cellIndex));
 }
 
+function digitMask(digit) {
+  return 1 << (digit - 1);
+}
+
 /**
  * @param {bigint} mask
  * @returns {number[]}
@@ -26,18 +30,67 @@ function cellsFromMask(mask) {
   return cells;
 }
 
+/**
+ * Validates the given items for the configuration.
+ * @param {Sudoku} config
+ * @param  {bigint} item
+ * @returns {boolean}}
+ */
+function _validate(config, item) {
+  const p = config.filter(~item);
+  // const b = p.board;
+
+  // Must be irreducible. Roughly. My reduce function isn't 100%, but this should be a pretty
+  // fast check compared to the next step of checking for multiple solutions.
+  if (p._reduce()) {
+  //  return (
+  //    `sieve item[${i}][${j}]: ${item}n; is reducable\n` +
+  //    `            ${b.join('')}\n` +
+  //    `  reduced > ${p.toString()}`
+  //  );
+    return false;
+  }
+
+  // Check that there are multiple solutions
+  const pFlag = p.solutionsFlag();
+  if (pFlag !== 2) {
+    // return `sieve item[${i}][${j}]: ${item}n; has pFlag = ${pFlag} (expected: 2)`;
+    return false;
+  }
+
+  // For every antiderivative, check that it has a single or no solution
+  for (const a of p.getAntiderivatives()) {
+    const aFlag = a.solutionsFlag();
+    if (aFlag === 0) {
+      // return `sieve item[${i}][${j}]: ${item}n; has no solution (expected: 1)`;
+      return false;
+    } else if (aFlag > 1) {
+      // return `sieve item[${i}][${j}]: ${item}n; has multiple solutions (expected: 1)`;
+      return false;
+    }
+  }
+
+  // return '';
+  return true;
+}
+
 // TODO Keep track of items in a 2D array, indexed by [num cells]
 
 export default class SudokuSieve {
   /**
-   *
+   * TODO: Adapt to allow copy constructor.
    * @param {object} options
    * @param {Sudoku} options.config
    * @param {bigint[]} options.items
    */
   constructor({ config, items = [] }) {
     this._config = new Sudoku(config);
-    /** @type {bigint[][]} */
+    this._configBoard = this._config.board;
+
+    /**
+     * number[0 to 81]bigint[]
+     * @type {bigint[][]}
+     */
     this._items = Array(81).fill(0).map(_=>[]);
     this._length = 0;
 
@@ -56,13 +109,25 @@ export default class SudokuSieve {
     if (items.length > 0) {
       this.add(...items);
     }
+
+    /**
+     * Keeps track of which items need to be validated.
+     * @type {bigint[]}
+     */
+    this._needsValidating = [];
+
+    /**
+     * Keeps track of which items have been validated. Parallel to _items.
+     * @type {bigint[][]}
+     */
+    this._validated = Array(81).fill(0).map(_=>[]);
   }
 
   /**
    * @type {Sudoku}
    */
   get config() {
-    return new Sudoku(this._config);
+    return this._config;
   }
 
   /**
@@ -85,11 +150,19 @@ export default class SudokuSieve {
   }
 
   /**
+   * Returns true if and only if all items have been validated.
+   * @type {boolean}
+   */
+  get validated() {
+    return this._needsValidating.length === 0;
+  }
+
+  /**
    *
    * @param {bigint} mask
    * @returns {number}
    */
-  _numCells(mask) {
+  _countMaskCells(mask) {
     let result = 0;
     while (mask > 0n) {
       if (mask & 1n) {
@@ -100,12 +173,29 @@ export default class SudokuSieve {
     return result;
   }
 
+  _countMaskDigits(mask) {
+    let result = 0;
+    let track = 0;
+    let ci = 80;
+    let d = 0;
+    while (mask > 0n) {
+      d = digitMask(this._configBoard[ci]);
+      if ((mask & 1n) && !(track & d)) {
+        result++;
+        track |= d;
+      }
+      mask >>= 1n;
+      ci--;
+    }
+    return result;
+  }
+
   _itemsFor(mask) {
-    return this._items[this._numCells(mask)];
+    return this._items[this._countMaskCells(mask)];
   }
 
   /**
-   *
+   * TODO Constant time solution
    * @param {bigint} mask
    * @returns {boolean}
    */
@@ -120,6 +210,27 @@ export default class SudokuSieve {
   forEach(callback) {
     this.items.forEach(callback);
   }
+
+  /**
+   * Determines whether the given mask satisfies all items in the sieve.
+   *
+   * TODO Test
+   * @param {bigint} mask
+   * @returns {boolean} true if the mask satisfies all items in the sieve; otherwise false.
+   */
+  doesMaskSatisfy(mask) {
+    for (let i = 0; i < 81; i++) {
+      const itemsLen = this._items[i].length;
+      for (let j = 0; j < itemsLen; j++) {
+        const item = this._items[i][j];
+        if ((item & mask) === 0n) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
 
   /**
    *
@@ -175,16 +286,34 @@ export default class SudokuSieve {
    * @returns {boolean} True if any items were added.
    */
   add(...items) {
+    // Sort items by number of cells and fast remove derivatives and duplicates for efficiency
+    // let _items = [...items].filter(n=>(n>0n)).sort((a, b) => this._numCells(a) - this._numCells(b));
+
+    // Remove derivatives within the given items, but not against the sieve yet.
+    // let len = _items.length;
+    // for (let i = 0; i < len; i++) {
+    //   const a = _items[i];
+    //   for (let j = len - 1; j > i; j--) {
+    //     const b = _items[j];
+    //     if ((a & b) === a) {
+    //       _items.splice(j, 1);
+    //       len--;
+    //     }
+    //   }
+    // }
+
     let added = false;
     for (const item of items) {
-      if (!this._itemsFor(item).includes(item) && !this._isDerivative(item)) {
-        added = true;
-        this._itemsFor(item).push(item);
-        this._addItemToMatrix(item);
-        this._length++;
+      if (this.isDerivative(item) || !_validate(this._config, item)) {
+        continue;
       }
+
+      added = true;
+      this._itemsFor(item).push(item);
+      // this._addItemToMatrix(item);
+      this._length++;
     }
-    this._removeDerivatives();
+    // this._removeDerivatives();
     return added;
   }
 
@@ -198,6 +327,7 @@ export default class SudokuSieve {
 
   /**
    * Removes and returns all items from this sieve that have bits overlapping with the given mask.
+   * TODO Rename to 'reduce'
    *
    * Only a single overlapping bit is necessary for an item to be removed.
    * @param {bigint} mask
@@ -231,8 +361,22 @@ export default class SudokuSieve {
    * @param {bigint} mask
    * @returns {boolean}
    */
-  _isDerivative(mask) {
-    return this._items.some(subItems => subItems.some(item => (item & mask) === item));
+  isDerivative(mask) {
+    // return this._items.some(subItems => subItems.some(item => (item & mask) === item));
+
+    const len = this._items.length;
+    for (let m = 0; m < len; m++) {
+      const sub = this._items[m];
+      const subLen = sub.length;
+      let sieveItem = null;
+      for (let i = 0; i < subLen; i++) {
+        sieveItem = sub[i];
+        if ((sieveItem & mask) === sieveItem) {
+          return true;
+        }
+      }
+    }
+    return false;
 
     // return this._itemsFor(mask).some(item => (item & mask) === item);
     // for (const other of this._items) {
@@ -518,6 +662,81 @@ export default class SudokuSieve {
     // }
     // return cells;
   }
+
+  /**
+   *
+   */
+  validate() {
+    /** @type {string[]} */
+    const errors = [];
+    const itemsLen = this._items.length;
+    for (let i = 0; i < itemsLen; i++) {
+      const subArrLen = this._items[i].length;
+      for (let j = 0; j < subArrLen; j++) {
+        const item = this._items[i][j];
+        const p = this._config.filter(~item);
+        const b = p.board;
+
+        if (p._reduce()) {
+          errors.push(
+            `sieve item[${i}][${j}]: ${item}n; is reducable\n` +
+            `            ${b.join('')}\n` +
+            `  reduced > ${p.toString()}`
+          );
+          continue;
+        }
+
+        // Check that there are multiple solutions
+        const pFlag = p.solutionsFlag();
+        if (pFlag !== 2) {
+          errors.push(`sieve item[${i}][${j}]: ${item}n; has pFlag = ${pFlag} (expected: 2)`);
+          continue;
+        }
+
+        // For every antiderivative, check that it has a single or no solution
+        for (const a of p.getAntiderivatives()) {
+          const aFlag = a.solutionsFlag();
+          if (aFlag === 0) {
+            errors.push(`sieve item[${i}][${j}]: ${item}n; has no solution (expected: 1)`);
+          } else if (aFlag > 1) {
+            errors.push(`sieve item[${i}][${j}]: ${item}n; has multiple solutions (expected: 1)`);
+          }
+        }
+      }
+    }
+
+    return errors;
+  }
+
+  /**
+   * TODO Remove items from sieve instead of making a copy.
+   * @param {options} options
+   * @param {number} options.maxLength Maximum number of items to keep.
+   * @param {number} options.maxCells
+   * @param {number} options.maxDigits
+   * @returns {SudokuSieve} A new SudokuSieve that's been pruned.
+   */
+  prune({ maxLength, maxCells = 81, maxDigits = 9 }) {
+    maxLength ??= this.length;
+    // TODO maxLength not used
+    return this.items.filter((item) => (
+      (this._countMaskCells(item) <= maxCells) &&
+      (this._countMaskDigits(item) <= maxDigits)
+    ));
+
+  }
+
+  /**
+   *
+   * @param {*} param0
+   */
+  search({
+    maxCells,
+    maxDigits,
+    validateOnAdd,
+  }) {
+
+  }
 }
 
 /**
@@ -536,7 +755,7 @@ export function validateSieve(sieve) {
 
   const config = sieve.config;
 
-  if (!config.isConfig()) {
+  if (!config.isSolved) {
     config.isValid = false;
     config.reason = `sieve config is invalid: [${config.toString()}]`;
   } else {

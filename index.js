@@ -103,7 +103,7 @@ import {
   createSieve,
   findUnsolvablePairs,
   isUnsolvablePair,
-  createSieve2,
+  searchForSieve2,
   isIrreducableChain,
   analyzeEmptyCellChain
 } from './src/sudoku/siever.js';
@@ -218,7 +218,7 @@ export {
   createSieve,
   findUnsolvablePairs,
   isUnsolvablePair,
-  createSieve2,
+  searchForSieve2 as searchForSieve2,
   isIrreducableChain,
   analyzeEmptyCellChain
 };

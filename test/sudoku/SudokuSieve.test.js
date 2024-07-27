@@ -42,15 +42,15 @@ describe('SudokuSieve', () => {
     });
   });
 
-  describe('_isDerivative', () => {
+  describe('isDerivative', () => {
     test('returns true if the item is a derivative', () => {
       sieve.add(1n);
-      expect(sieve._isDerivative(3n)).toBe(true);
+      expect(sieve.isDerivative(3n)).toBe(true);
     });
 
     test('returns false if the item is not a derivative', () => {
       sieve.add(1n);
-      expect(sieve._isDerivative(2n)).toBe(false);
+      expect(sieve.isDerivative(2n)).toBe(false);
     });
   });
 
@@ -122,8 +122,8 @@ describe('SudokuSieve', () => {
       const p = new Sudoku('847152693921376485635948721472635.1.3167895425982143672.35.1.747.942315.1548.723.');
 
       // Verify that c and s is valid and s has solutionsFlag = 2 and c has solutionsFlag = 1
-      expect(p.isValid()).toBe(true);
-      expect(c.isValid()).toBe(true);
+      expect(p.isValid).toBe(true);
+      expect(c.isValid).toBe(true);
       expect(p.solutionsFlag()).toBe(2);
       expect(c.solutionsFlag()).toBe(1);
 
@@ -135,7 +135,7 @@ describe('SudokuSieve', () => {
         if (pBoard[ci] === 0) {
           const pCopy = new Sudoku(p);
           pCopy.setDigit(cBoard[ci], ci);
-          expect(pCopy.isValid()).toBe(true);
+          expect(pCopy.isValid).toBe(true);
           expect(pCopy.solutionsFlag()).toBe(1);
         }
       }

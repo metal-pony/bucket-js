@@ -116,7 +116,7 @@ const nckCache = {
  * Computes n choose k.
  * @param {number} n
  * @param {number} k
- * @returns {BigInt}
+ * @returns {bigint}
  */
 export function nChooseK(n, k) {
   if (n < 0 || k < 0 || n < k) {
